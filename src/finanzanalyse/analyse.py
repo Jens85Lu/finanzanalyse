@@ -1,7 +1,4 @@
-from finanzanalyse.database import create_database, import_transactions, load_transactions
-from finanzanalyse.account import load_account_csv
-from finanzanalyse.paths import RAW_DATA_DIR
-from finanzanalyse.kategorien import *
+from finanzanalyse.kategorien import kategorisiere_buchung
 
 def add_metaData(df):
     df = df.copy()

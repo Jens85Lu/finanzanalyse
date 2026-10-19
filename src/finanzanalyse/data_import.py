@@ -14,11 +14,28 @@ def import_file(csv_file):
 
     print(f"  {csv_file.name} verschoben.")
 
+    return number_imported
+
 
 def import_all_files():
     IMPORTED_DATA_DIR.mkdir(exist_ok=True)
 
-    for csv_file in RAW_DATA_DIR.glob("*.csv"):
+    total_imported = 0
+    csv_files = list(RAW_DATA_DIR.glob("*.csv"))
+
+    for csv_file in csv_files:
         print(f"Importiere: {csv_file.name}")
-        import_file(csv_file)
+
+        number_imported = import_file(csv_file)
+
+        if number_imported is None:
+            raise TypeError(
+                f"import_file({csv_file.name}) hat None zurückgegeben."
+            )
+
+        total_imported += number_imported
+
+    return total_imported
+
+
 

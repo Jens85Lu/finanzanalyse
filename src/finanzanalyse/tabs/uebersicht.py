@@ -50,6 +50,80 @@ def format_euro(value):
     )
 
 
+
+def zeige_letzte_fints_buchungen(df):
+    """Alle FinTS-Buchungen in der Übersicht anzeigen."""
+
+    st.subheader("Aktuelle Buchungen (FinTS)")
+
+    # Prüfen, ob FinTS bereits abgeglichen wurde
+    if "datenquelle" not in df.columns:
+        st.info("Bitte zuerst FinTS aktualisieren.")
+        return
+
+    # Nur Buchungen auswählen, die aus FinTS stammen.
+    buchungen = df.loc[df["datenquelle"] == "FinTS"].copy()
+
+    if buchungen.empty:
+        st.info("Keine FinTS-Buchungen vorhanden. Bitte FinTS aktualisieren.")
+        return
+
+    buchungen["buchung"] = pd.to_datetime(buchungen["buchung"])
+
+    # Neueste Buchungen zuerst
+    buchungen = buchungen.sort_values(
+        "buchung",
+        ascending=False,
+    )
+
+    spalten = {
+        "buchung": "Buchungstag",
+        "wertstellungsdatum": "Wertstellung",
+        "auftraggeber_empfaenger": "Auftraggeber / Empfänger",
+        "verwendungszweck": "Verwendungszweck",
+        "betrag": "Betrag (€)",
+        "saldo": "Saldo (€)",
+    }
+
+    vorhandene_spalten = [
+        spalte for spalte in spalten
+        if spalte in buchungen.columns
+    ]
+
+    anzeige = buchungen[vorhandene_spalten].rename(
+        columns=spalten
+    )
+
+    for spalte in ("Buchungstag", "Wertstellung"):
+        if spalte in anzeige.columns:
+            anzeige[spalte] = pd.to_datetime(
+                anzeige[spalte],
+                errors="coerce",
+            ).dt.strftime("%d.%m.%Y")
+
+    for spalte in ("Betrag (€)", "Saldo (€)"):
+        if spalte in anzeige.columns:
+            anzeige[spalte] = pd.to_numeric(
+                anzeige[spalte],
+                errors="coerce",
+            )
+
+    st.dataframe(
+        anzeige,
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "Betrag (€)": st.column_config.NumberColumn(
+                format="%.2f €",
+            ),
+            "Saldo (€)": st.column_config.NumberColumn(
+                format="%.2f €",
+            ),
+        },
+    )
+
+
+
 def zeige_uebersicht(auswahl, monat_name, jahr):
     """Kennzahlen und Diagramme der Übersichtsseite."""
 

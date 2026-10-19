@@ -4,7 +4,7 @@ import pandas as pd
 from finanzanalyse.paths import DATA_DIR
 
 
-DB_FILE = DATA_DIR / "beispiel.db"
+DB_FILE = DATA_DIR / "finanzen.db"
 
 
 def create_database():
