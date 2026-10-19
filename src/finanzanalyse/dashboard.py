@@ -1,7 +1,7 @@
 
 import streamlit as st
 import os
-from datetime import date
+from datetime import date, timedelta
 import pandas as pd
 from dotenv import load_dotenv
 from finanzanalyse.fints_import import (
@@ -52,24 +52,29 @@ def load_data():
 def load_combined_data(csv_df):
     """CSV-Historie und aktuelle FinTS-Buchungen verbinden."""
 
-    if csv_df.empty:
-        raise ValueError("Die CSV-Historie ist leer.")
-
-    # Letzter Buchungstag aus der CSV-Historie
-    letzter_csv_tag = pd.to_datetime(csv_df["buchung"]).max().date()
     heute = date.today()
 
-    # FinTS-Abfragen sind auf maximal 90 Tage begrenzt.
-    zeitraum = (heute - letzter_csv_tag).days
-    if zeitraum < 0:
-        raise ValueError(
-            "Der letzte CSV-Buchungstag liegt in der Zukunft."
-        )
-    if zeitraum > 90:
-        raise ValueError(
-            f"Seit dem letzten CSV-Buchungstag sind {zeitraum} Tage "
-            "vergangen. Bitte zuerst aktuelle CSV-Daten importieren."
-        )
+    if csv_df.empty:
+        # Erstinstallation: die letzten 90 Tage abrufen.
+        letzter_csv_tag = heute - timedelta(days=90)
+    else:
+        # Bestehende Installation: ab dem letzten CSV-Buchungstag.
+        letzter_csv_tag = pd.to_datetime(
+            csv_df["buchung"]
+        ).max().date()
+
+        zeitraum = (heute - letzter_csv_tag).days
+
+        if zeitraum < 0:
+            raise ValueError(
+                "Der letzte CSV-Buchungstag liegt in der Zukunft."
+            )
+
+        if zeitraum > 90:
+            raise ValueError(
+                f"Seit dem letzten CSV-Buchungstag sind {zeitraum} Tage "
+                "vergangen. Bitte zuerst aktuelle CSV-Daten importieren."
+            )
 
     # Zugangsdaten aus der .env-Datei
     client = create_client(
@@ -123,6 +128,8 @@ if number_imported > 0:
     st.session_state.pop("fints_info", None)
 
 
+
+
 def main():
     st.title("Finanzanalyse")
     st.caption("Einnahmen, Ausgaben und finanzielle Entwicklung")
@@ -131,17 +138,21 @@ def main():
     csv_df = load_data()
 
     if csv_df.empty:
-        st.warning("Keine Buchungen gefunden.")
-        return
+        st.info(
+            "Keine CSV-Buchungen gefunden. "
+            "Du kannst direkt mit FinTS starten."
+        )
 
-    # Beim ersten Aufruf zunächst die CSV-Historie anzeigen.
+    # Beim ersten Aufruf die CSV-Historie übernehmen.
     if "gemeinsames_df" not in st.session_state:
         st.session_state["gemeinsames_df"] = csv_df.copy()
 
     # FinTS nur auf ausdrücklichen Wunsch aktualisieren.
     if st.button("FinTS-Daten aktualisieren", type="primary"):
         try:
-            with st.spinner("FinTS-Buchungen werden geladen und abgeglichen …"):
+            with st.spinner(
+                "FinTS-Buchungen werden geladen und abgeglichen …"
+            ):
                 gemeinsames_df, info = load_combined_data(csv_df)
 
             st.session_state["gemeinsames_df"] = gemeinsames_df
@@ -159,17 +170,33 @@ def main():
     info = st.session_state.get("fints_info")
 
     if info:
-        letzter_csv_tag = info["letzter_csv_tag"]
-        st.caption(
-            f"CSV-Historie bis {letzter_csv_tag:%d.%m.%Y} · "
-            f"FinTS-Daten ab {letzter_csv_tag:%d.%m.%Y}"
-        )
+        letzter_csv_tag = info.get("letzter_csv_tag")
+
+        if pd.isna(letzter_csv_tag):
+            st.caption(
+                "Keine CSV-Historie vorhanden · "
+                "Daten wurden über FinTS geladen"
+            )
+        else:
+            letzter_csv_tag = pd.to_datetime(letzter_csv_tag).date()
+            st.caption(
+                f"CSV-Historie bis {letzter_csv_tag:%d.%m.%Y} · "
+                f"FinTS-Daten ab {letzter_csv_tag:%d.%m.%Y}"
+            )
     else:
-        letzter_csv_tag = pd.to_datetime(csv_df["buchung"]).max().date()
-        st.caption(
-            f"CSV-Historie bis {letzter_csv_tag:%d.%m.%Y} · "
-            "FinTS noch nicht aktualisiert"
-        )
+        if csv_df.empty:
+            st.caption("FinTS noch nicht aktualisiert.")
+        else:
+            letzter_csv_tag = pd.to_datetime(csv_df["buchung"]).max()
+
+            if pd.isna(letzter_csv_tag):
+                st.caption("Kein gültiges CSV-Buchungsdatum vorhanden.")
+            else:
+                letzter_csv_tag = letzter_csv_tag.date()
+                st.caption(
+                    f"CSV-Historie bis {letzter_csv_tag:%d.%m.%Y} · "
+                    "FinTS noch nicht aktualisiert"
+                )
 
     # Kontrolle: aktueller Datenbestand
     st.write(f"Anzahl Buchungen: {len(df)}")
@@ -232,27 +259,34 @@ def main():
     # ------------------------------------------------------------
 
     tab_uebersicht, tab_kategorien, tab_ausgaben, tab_einnahmen, tab_buchungen = st.tabs(
-    ["Übersicht", "Kategorien", "Ausgaben", "Einnahmen", "Buchungen"]
+        ["Übersicht", "Kategorien", "Ausgaben", "Einnahmen", "Buchungen"]
     )
 
-    with tab_uebersicht:
-        if "gemeinsames_df" in st.session_state:
-            zeige_letzte_fints_buchungen(
-                st.session_state["gemeinsames_df"]
-            )
-        zeige_uebersicht(auswahl, monat_name, jahr)
+    if df.empty:
+        st.info(
+            "Noch keine Buchungen vorhanden. "
+            "Importiere eine CSV-Datei oder aktualisiere die FinTS-Daten."
+        )
+    else:
 
-    with tab_kategorien:
-        zeige_kategorien(auswahl, jahresdaten, monat_name, jahr)
+        with tab_uebersicht:
+            if "gemeinsames_df" in st.session_state:
+                zeige_letzte_fints_buchungen(
+                    st.session_state["gemeinsames_df"]
+                )
+            zeige_uebersicht(auswahl, monat_name, jahr)
 
-    with tab_ausgaben:
-        zeige_ausgaben(auswahl, jahresdaten, monat_name, jahr)
+        with tab_kategorien:
+            zeige_kategorien(auswahl, jahresdaten, monat_name, jahr)
 
-    with tab_einnahmen:
-        zeige_einnahmen(auswahl, jahresdaten, monat_name, jahr)
+        with tab_ausgaben:
+            zeige_ausgaben(auswahl, jahresdaten, monat_name, jahr)
 
-    with tab_buchungen:
-        zeige_buchungen(auswahl, jahresdaten, monat_name, jahr)
+        with tab_einnahmen:
+            zeige_einnahmen(auswahl, jahresdaten, monat_name, jahr)
+
+        with tab_buchungen:
+            zeige_buchungen(auswahl, jahresdaten, monat_name, jahr)
 
 
 if __name__ == "__main__":

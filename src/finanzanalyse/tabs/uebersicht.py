@@ -50,7 +50,6 @@ def format_euro(value):
     )
 
 
-
 def zeige_letzte_fints_buchungen(df):
     """Alle FinTS-Buchungen in der Übersicht anzeigen."""
 
@@ -111,7 +110,7 @@ def zeige_letzte_fints_buchungen(df):
     st.dataframe(
         anzeige,
         hide_index=True,
-        use_container_width=True,
+        width='stretch',
         column_config={
             "Betrag (€)": st.column_config.NumberColumn(
                 format="%.2f €",
@@ -126,6 +125,14 @@ def zeige_letzte_fints_buchungen(df):
 
 def zeige_uebersicht(auswahl, monat_name, jahr):
     """Kennzahlen und Diagramme der Übersichtsseite."""
+
+    if auswahl.empty:
+        st.info("Noch keine Buchungen für die Übersicht vorhanden.")
+        return
+
+    if jahr is None or monat_name is None:
+        st.info("Bitte wähle einen gültigen Zeitraum aus.")
+        return
 
     einnahmen = auswahl.loc[
         auswahl["betrag"] > 0, "betrag"

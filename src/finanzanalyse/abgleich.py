@@ -17,16 +17,67 @@ def geld(wert):
     )
 
 
+
 def abgleichen(csv_df, fints_df, balances, konto_iban):
     """CSV-Historie und aktuelle FinTS-Buchungen verbinden."""
-
-    if csv_df.empty:
-        raise ValueError("Die CSV-Historie ist leer.")
 
     if konto_iban not in balances:
         raise ValueError(f"Keine FinTS-Salden für {konto_iban} gefunden.")
 
-    # CSV chronologisch sortieren.
+    # FinTS-Buchungen des ausgewählten Kontos vorbereiten.
+    fints = fints_df[
+        fints_df["konto_iban"].astype(str) == str(konto_iban)
+    ].copy()
+
+    if fints.empty:
+        raise ValueError("FinTS hat keine Buchungen für das Konto geliefert.")
+
+    fints["buchung"] = pd.to_datetime(fints["buchung"])
+    fints["betrag"] = fints["betrag"].map(geld)
+    fints = fints.sort_values("buchung", kind="stable")
+
+    # FinTS-Anfangs- und Endsaldo auslesen.
+    saldo_info = balances[konto_iban]
+    saldo_anfang = geld(saldo_info["opening"])
+    saldo_ende = geld(saldo_info["closing"])
+
+    # ---------------------------------------------------------
+    # Fall 1: Keine CSV-Historie – FinTS ist die erste Datenquelle.
+    # ---------------------------------------------------------
+    if csv_df.empty:
+        print("Keine CSV-Historie vorhanden. Starte mit FinTS.")
+
+        anzeige_df = fints.copy()
+        anzeige_df["saldo"] = None
+
+        saldo = saldo_anfang
+
+        for index in anzeige_df.index:
+            saldo += anzeige_df.at[index, "betrag"]
+            anzeige_df.at[index, "saldo"] = saldo
+
+        anzeige_df["datenquelle"] = "FinTS"
+
+        anzeige_df["betrag"] = anzeige_df["betrag"].map(float)
+        anzeige_df["saldo"] = anzeige_df["saldo"].map(float)
+
+        print(f"FinTS-Anfangssaldo:   {saldo_anfang:.2f} €")
+        print(f"Berechneter Endsaldo: {saldo:.2f} €")
+        print(f"FinTS-Endsaldo:       {saldo_ende:.2f} €")
+
+        if saldo != saldo_ende:
+            raise ValueError(
+                "Der berechnete Endsaldo stimmt nicht mit "
+                "dem FinTS-Endsaldo überein. "
+                "Bitte Zeitraum und gelieferte Buchungen prüfen."
+            )
+
+        return anzeige_df, saldo, saldo_ende
+
+    # ---------------------------------------------------------
+    # Fall 2: CSV-Historie vorhanden – bisheriger Abgleich.
+    # ---------------------------------------------------------
+
     csv = csv_df.copy()
     csv["buchung"] = pd.to_datetime(csv["buchung"])
     csv["betrag"] = csv["betrag"].map(geld)
@@ -55,12 +106,11 @@ def abgleichen(csv_df, fints_df, balances, konto_iban):
     csv_vortag = csv[
         csv["buchung"].dt.normalize() == vortag
     ]
-    saldo_csv = csv_vortag.iloc[-1]["saldo"]
+    print(csv_vortag[
+        ["id", "buchung", "betrag", "saldo"]
+    ].to_string(index=False))
 
-    # FinTS-Anfangs- und Endsaldo auslesen.
-    saldo_info = balances[konto_iban]
-    saldo_anfang = geld(saldo_info["opening"])
-    saldo_ende = geld(saldo_info["closing"])
+    saldo_csv = csv_vortag.iloc[0]["saldo"]
 
     print(f"CSV-Vortag:          {vortag.date()}")
     print(f"CSV-Übergangstag:    {letzter_tag.date()}")
@@ -78,19 +128,6 @@ def abgleichen(csv_df, fints_df, balances, konto_iban):
         csv["buchung"].dt.normalize() < letzter_tag
     ].copy()
 
-    # FinTS-Buchungen des Girokontos auswählen.
-    fints = fints_df[
-        fints_df["konto_iban"].astype(str) == str(konto_iban)
-    ].copy()
-
-    if fints.empty:
-        raise ValueError("FinTS hat keine Buchungen für das Konto geliefert.")
-
-    fints["buchung"] = pd.to_datetime(fints["buchung"])
-    fints["betrag"] = fints["betrag"].map(geld)
-    fints = fints.sort_values("buchung", kind="stable")
-
-    # FinTS-Buchungen anhängen und den laufenden Saldo berechnen.
     saldo = saldo_anfang
     neue_zeilen = []
 
@@ -123,11 +160,9 @@ def abgleichen(csv_df, fints_df, balances, konto_iban):
         [anzeige_df, fints_anzeige], ignore_index=True
     )
 
-    # Geldwerte in normale Zahlen für die Anzeige umwandeln.
     anzeige_df["betrag"] = anzeige_df["betrag"].map(float)
     anzeige_df["saldo"] = anzeige_df["saldo"].map(float)
 
-    # Berechneten Saldo mit dem FinTS-Endsaldo vergleichen.
     print(f"Berechneter Endsaldo: {saldo:.2f} €")
     print(f"FinTS-Endsaldo:       {saldo_ende:.2f} €")
     print(f"Saldo korrekt:        {saldo == saldo_ende}")
