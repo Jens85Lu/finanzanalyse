@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Generierte Python-Paketmetadaten
+*.egg-info/
+
+# Umgebungsvariablen und Geheimnisse
+.env
+.env.*
+!.env.example
+
+# Lokale Datenbanken
+*.db
+*.sqlite
+*.sqlite3
+
+# Persönliche Finanzdaten
+data/raw/
+data/imported/
+data/processed/
+
+# Editor und Betriebssystem
+.vscode/
+.idea/
+.DS_Store
+
+# Beispieldaten
+!Beispielumsatz_2026.csv
