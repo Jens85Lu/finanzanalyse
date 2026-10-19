@@ -12,6 +12,8 @@ dependencies = [
     "matplotlib",
     "streamlit>=1.65.0",
     "plotly>=7.1.0",
+    "python-dotenv>=1.2.4",
+    "fints>=5.0.1",
 ]
 
 [tool.setuptools.packages.find]
